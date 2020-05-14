@@ -46,11 +46,11 @@
 
 
         // For Messaging  Selecting the input element in a variable
-        var myName = document.querySelector('#myName')
-        var myMessage = document.querySelector('#myMessage')
-        var sendMessage = document.querySelector('#sendMessage')
-        var chatArea = document.querySelector('#chatArea')
-        var ROOM = 'chat'
+        var myName = document.querySelector('#myName');
+        var myMessage = document.querySelector('#myMessage');
+        var sendMessage = document.querySelector('#sendMessage');
+        var chatArea = document.querySelector('#chatArea');
+        var ROOM = 'chat';
 
         // Get info for the available media Device and pass it to getCameras function
         navigator.mediaDevices.enumerateDevices().then(function (sources) {
@@ -64,15 +64,29 @@
         // startStream();
 
         // For Broadcasting Messages across the room on ready and annouce the message to displayMessage function
-        io = io.connect()
-        io.emit('ready', ROOM)
+        io = io.connect();
+        io.emit('ready', ROOM);
+
         io.on('announce', function (data) {
-            displayMessage(data.message)
+            displayMessage(data.message);
+        })
+
+        
+        // Adding event Listeners to send message Button for displaying messages
+        sendMessage.addEventListener('click', function (e) {
+            io.emit('send', { "author": myName.value, "message": myMessage.value, "room": ROOM});
+            e.preventDefault();
+        }, false)
+        
+
+        io.on('startmessage', function (data) {
+            displayMessage(data.author + ": " + data.message);
         })
 
         // Displaying the message on chatArea
-        function displayMessage(message){
-            chatArea.innerHTML = chatArea.innerHTML + '<br>' + message
+        function displayMessage(message) {
+            console.log(message)
+            chatArea.innerHTML = chatArea.innerHTML + '<br>' + message;
         }
 
         // Getting source from enumerateDevices and iterating and creating the option for select video devices
