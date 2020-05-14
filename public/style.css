@@ -2,3 +2,7 @@
     -webkit-filter: saturate(0.03);
     filter: saturate(0.03);
 }
+
+.hide{
+    display: none;
+}
