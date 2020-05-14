@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Introduction to WebRTC</title>
+    <link rel="stylesheet" type="text/css" href="style.css" </head>
+
+<body>
+    <!-- Select Tag available Camera Device -->
+    <div>
+        Video: <select id="camera"></select>
+    </div>
+    <!-- Select Tag available Camera Device -->
+    <br>
+
+    <!-- Button to take Profile Picture -->
+    <div>
+        <button id="startbutton">Take photo</button>
+        <button id="clearbutton">Clear photo</button>
+    </div>
+    <!-- Button to take Profile Picture -->
+    <br>
+
+    <!-- Video Tag auto Play -->
+    <div>
+        <video autoplay></video>
+    </div>
+    <!-- Video Tag auto Play -->
+
+    <!-- Adding Canvas to capture frames -->
+    <canvas id="canvas" class="hide"></canvas>
+    <!-- Adding Canvas to capture frames -->
+
+
+    <!-- The output of the image captured -->
+    <div class="output">
+        <img id="photo" alt="The screen capture will appear in this box.">
+    </div>
+    <!-- The output of the image captured -->
+    <script>
+
+        // Selecting the video tag
+        var videoArea = document.querySelector('video');
+
+        // Selecting the select tag to display avalable video devices
+        var videoSelect = document.querySelector('#camera');
+
+        // Selecting the Canvas, Photo and StartButton 
+        var canvas = document.getElementById('canvas');
+        var photo = document.getElementById('photo');
+        var startbutton = document.getElementById('startbutton');
+
+
+        // scale the photo width, height to be be computed based on the input stream, initail values of streaming
+        var width = 300;
+        var height = 0;
+        var streaming = false
+
+        // Get info for the available media Device and pass it to getCameras function
+        navigator.mediaDevices.enumerateDevices().then(function (sources) {
+            getCameras(sources);
+        })
+
+        // Calling startStream function on selecting available video devices
+        videoSelect.onChange = startStream;
+
+        // Init startStream function
+        startStream();
+
+        // This is to calculate the height based on streaming boolean and setting on the canvas height and width 
+        videoArea.addEventListener('canplay', function (ev) {
+            if (!streaming) {
+                height = videoArea.videoHeight / (videoArea.videoWidth / width);
+
+                canvas.setAttribute('width', width);
+                canvas.setAttribute('height', height);
+                streaming = true;
+            }
+        }, false);
+
+
+        // Adding listener to the start button to take Picture
+        startbutton.addEventListener('click', function (e) {
+            takePicture();
+            e.preventDefault()
+        }, false)
+
+
+        // The function to capture currently displayed  video frame and remove class hide
+        function takePicture() {
+            var context = canvas.getContext('2d');
+            if (width && height) {
+                canvas.width = width;
+                canvas.height = height;
+                context.drawImage(videoArea, 0, 0, width, height);
+
+                var data = canvas.toDataURL('image/png');
+                photo.setAttribute('src', data);
+                photo.classList.remove("hide");
+            } else {
+                clearphoto();
+            }
+        }
+
+        // Adding listener to the clear button to clear canvas Picture
+        clearbutton.addEventListener('click', function (e) {
+            clearPhoto();
+            e.preventDefault()
+        }, false)
+
+
+        // Function  to clear Photo and add class hide to photo tag
+        function clearPhoto() {
+            var context = canvas.getContext('2d');
+            context.fillStyle = "#AAA";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            var data = canvas.toDataURL('image/png');
+            photo.setAttribute('src', data);
+            photo.classList.add("hide");
+        }
+
+        // Getting source from enumerateDevices and iterating and creating the option for select video devices
+        function getCameras(sourceInfos) {
+            for (var i = 0; i != sourceInfos.length; i++) {
+                var sourceInfo = sourceInfos[i];
+                var option = document.createElement('option');
+                option.value = sourceInfo.groupId || sourceInfo.deviceId;
+                if (sourceInfo.kind === 'videoinput') {
+                    option.text = sourceInfo.label || 'camera ' + (videoSelect.length + 1);
+                    videoSelect.appendChild(option);
+                }
+
+            }
+        }
+
+        //  Get the permission for user media, adding constraints for video tag followed by onSuccess and onError
+        function startStream() {
+            navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+
+            var constraints = {
+                audio: false,
+                video: {
+                    mandatory: {
+                        minWidth: 300,
+                        minHeight: 300,
+                        maxHeight: 300,
+                        maxWidth: 300
+                    }
+                }
+            };
+            navigator.getUserMedia(constraints, onSuccess, onError);
+
+            // Hide Default Photo tag 
+            if (photo.src.length <= 0){
+                photo.classList.add("hide");
+            }
+
+        }
+
+
+
+
+        // onSuccess get the stream and appent it to the video src and adding style to the class and play the video
+        function onSuccess(stream) {
+            console.log("Success! We have a stream!!");
+            // videoArea.src = window.URL.createObjectURL(stream);
+
+            videoArea.srcObject = stream;
+            videoArea.className = 'grayscale_filter';
+
+            videoArea.play();
+        }
+
+        // onError getting the error details on failure to load video
+        function onError(error) {
+            console.log("Error with getUserMedia", error);
+        }
+    </script>
+
+</body>
+
+</html>
