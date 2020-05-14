@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Introduction to WebRTC</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    </link>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+
+<body>
+    <!-- Select Tag available Camera Device -->
+    <div>
+        Video: <select id="camera"></select>
+    </div>
+    <!-- Select Tag available Camera Device -->
+
+    <br>
+
+    <!-- Video Tag auto Play -->
+    <div>
+        <video autoplay></video>
+    </div>
+    <!-- Video Tag auto Play -->
+
+    <br>
+    <!-- For Messaging Input Element to Add a name and display it on a output  -->
+    <div>
+        <label>Your Name </label><input type="text" id="myName">
+        <label>Message </label><input type="text" id="myMessage">
+        <input type="submit" id="sendMessage">
+        <div id="chatArea">Message Output:<br></div>
+    </div>
+    <!-- For Messaging Input Element to Add a name and display it on a output  -->
+
+
+
+    <!-- The output of the image captured -->
+    <script>
+
+        // Selecting the video tag
+        var videoArea = document.querySelector('video');
+
+        // Selecting the select tag to display avalable video devices
+        var videoSelect = document.querySelector('#camera');
+
+
+        // For Messaging  Selecting the input element in a variable
+        var myName = document.querySelector('#myName');
+        var myMessage = document.querySelector('#myMessage');
+        var sendMessage = document.querySelector('#sendMessage');
+        var chatArea = document.querySelector('#chatArea');
+        var ROOM = 'chat';
+
+        // Get info for the available media Device and pass it to getCameras function
+        navigator.mediaDevices.enumerateDevices().then(function (sources) {
+            getCameras(sources);
+        })
+
+        // Calling startStream function on selecting available video devices
+        videoSelect.onChange = startStream;
+
+        // Init startStream function
+        // startStream();
+
+        // For Broadcasting Messages across the room on ready and annouce the message to displayMessage function
+        io = io.connect();
+        io.emit('ready', ROOM);
+
+        io.on('announce', function (data) {
+            displayMessage(data.message);
+        })
+
+        
+        // Adding event Listeners to send message Button for displaying messages
+        sendMessage.addEventListener('click', function (e) {
+            io.emit('send', { "author": myName.value, "message": myMessage.value, "room": ROOM});
+            e.preventDefault();
+        }, false)
+        
+
+        io.on('startmessage', function (data) {
+            displayMessage(data.author + ": " + data.message);
+        })
+
+        // Displaying the message on chatArea
+        function displayMessage(message) {
+            console.log(message)
+            chatArea.innerHTML = chatArea.innerHTML + '<br>' + message;
+        }
+
+        // Getting source from enumerateDevices and iterating and creating the option for select video devices
+        function getCameras(sourceInfos) {
+            for (var i = 0; i != sourceInfos.length; i++) {
+                var sourceInfo = sourceInfos[i];
+                var option = document.createElement('option');
+                option.value = sourceInfo.groupId || sourceInfo.deviceId;
+                if (sourceInfo.kind === 'videoinput') {
+                    option.text = sourceInfo.label || 'camera ' + (videoSelect.length + 1);
+                    videoSelect.appendChild(option);
+                }
+
+            }
+        }
+
+        //  Get the permission for user media, adding constraints for video tag followed by onSuccess and onError
+        function startStream() {
+            navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+
+            var constraints = {
+                audio: false,
+                video: false
+            };
+            navigator.getUserMedia(constraints, onSuccess, onError);
+
+        }
+
+
+
+
+        // onSuccess get the stream and appent it to the video src and adding style to the class and play the video
+        function onSuccess(stream) {
+            console.log("Success! We have a stream!!");
+            // videoArea.src = window.URL.createObjectURL(stream);
+
+            videoArea.srcObject = stream;
+            videoArea.className = 'grayscale_filter';
+
+            videoArea.play();
+        }
+
+        // onError getting the error details on failure to load video
+        function onError(error) {
+            console.log("Error with getUserMedia", error);
+        }
+    </script>
+
+</body>
+
+</html>

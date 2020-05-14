@@ -9,18 +9,14 @@
 </head>
 
 <body>
-    <!-- Select Tag available Camera Device -->
-    <div>
-        Video: <select id="camera"></select>
-    </div>
-    <!-- Select Tag available Camera Device -->
-
-    <br>
 
     <!-- Video Tag auto Play -->
+    <!-- Added Id to separate two video tags -->
     <div>
-        <video autoplay></video>
+        <video id="myVideo" autoplay></video> <!-- Added Id to separate two video tags -->
+        <video id="theirVideo" autoplay></video>
     </div>
+    <!-- Added Id to separate two video tags -->
     <!-- Video Tag auto Play -->
 
     <br>
@@ -30,6 +26,8 @@
         <label>Message </label><input type="text" id="myMessage">
         <input type="submit" id="sendMessage">
         <div id="chatArea">Message Output:<br></div>
+        <hr>
+        <div id="signalingArea">Signaling Message:<br></div> <!-- Added Signaling Area to show messages -->
     </div>
     <!-- For Messaging Input Element to Add a name and display it on a output  -->
 
@@ -39,10 +37,9 @@
     <script>
 
         // Selecting the video tag
-        var videoArea = document.querySelector('video');
+        var myVideoArea = document.querySelector('#myVideo');  // Changed the query Selector for my video tag
+        var theirVideoArea = document.querySelector('#theirVideo'); // Added the query Selector for thier video tag
 
-        // Selecting the select tag to display avalable video devices
-        var videoSelect = document.querySelector('#camera');
 
 
         // For Messaging  Selecting the input element in a variable
@@ -50,34 +47,26 @@
         var myMessage = document.querySelector('#myMessage');
         var sendMessage = document.querySelector('#sendMessage');
         var chatArea = document.querySelector('#chatArea');
-        var ROOM = 'chat';
+        var signalingArea = document.querySelector('#signalingArea'); // Added a signaling area query selector
+        var ROOM = 'chat-room';
+        var SIGNAL_ROOM = 'signal-room'; //Added varibale for signaling room
 
-        // Get info for the available media Device and pass it to getCameras function
-        navigator.mediaDevices.enumerateDevices().then(function (sources) {
-            getCameras(sources);
-        })
-
-        // Calling startStream function on selecting available video devices
-        videoSelect.onChange = startStream;
-
-        // Init startStream function
-        // startStream();
 
         // For Broadcasting Messages across the room on ready and annouce the message to displayMessage function
         io = io.connect();
-        io.emit('ready', ROOM);
+        io.emit('ready', { "chat_room": ROOM, "signal_room": SIGNAL_ROOM }); // changed the on ready to initiate two rooms
 
         io.on('announce', function (data) {
             displayMessage(data.message);
         })
 
-        
+
         // Adding event Listeners to send message Button for displaying messages
         sendMessage.addEventListener('click', function (e) {
-            io.emit('send', { "author": myName.value, "message": myMessage.value, "room": ROOM});
+            io.emit('send', { "author": myName.value, "message": myMessage.value, "room": ROOM });
             e.preventDefault();
         }, false)
-        
+
 
         io.on('startmessage', function (data) {
             displayMessage(data.author + ": " + data.message);
@@ -85,54 +74,105 @@
 
         // Displaying the message on chatArea
         function displayMessage(message) {
-            console.log(message)
             chatArea.innerHTML = chatArea.innerHTML + '<br>' + message;
         }
 
-        // Getting source from enumerateDevices and iterating and creating the option for select video devices
-        function getCameras(sourceInfos) {
-            for (var i = 0; i != sourceInfos.length; i++) {
-                var sourceInfo = sourceInfos[i];
-                var option = document.createElement('option');
-                option.value = sourceInfo.groupId || sourceInfo.deviceId;
-                if (sourceInfo.kind === 'videoinput') {
-                    option.text = sourceInfo.label || 'camera ' + (videoSelect.length + 1);
-                    videoSelect.appendChild(option);
-                }
 
+        // ####################### Signaling Functions ######################################
+
+        // Defined a Stun Server and a variable
+        var configuration = { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] };
+        var rtcPeerConn;
+
+
+        // Io Socket to emit signal route defined in server js
+        io.emit('signal', { "type": "user_here", "message": "Are you ready for a call?", "room": SIGNAL_ROOM });
+
+        // Handling the broadcast signaling message for route defined in server js
+        io.on('signaling-message', function (data) {
+            displaySignalMessage("Signal Received: " + data.type);
+
+            // SetUp the RTC Peer Connection Object
+            if (!rtcPeerConn) {
+                startSignaling();
             }
-        }
 
-        //  Get the permission for user media, adding constraints for video tag followed by onSuccess and onError
-        function startStream() {
+            if (data.type != "user_here"){
+                var message = JSON.parse(data.message);
+                if (message.sdp){
+                    rtcPeerConn.setRemoteDescription(new RTCSessionDescription(message.sdp), function(){
+                        // If we received an offer, we need to answer
+                        if (rtcPeerConn.remoteDescription.type == 'offer'){
+                            rtcPeerConn.createAnswer(sendLocalDesc, logError);
+                        }
+                    }, logError);
+                }
+                else{
+                    rtcPeerConn.addIceCandidate(new RTCIceCandidate(message.candidate));
+                }
+            }
+        })
+
+        // Function to check whether signaling is established
+        function startSignaling() {
+            displaySignalMessage("Starting Signaling....");
+
+            rtcPeerConn = new webkitRTCPeerConnection(configuration); // Initializing the RTC Peer connection
+
+            // send any ice candidates to the other peer
+            rtcPeerConn.onicecandidate = function (ev) {
+                if (ev.candidate) {
+                    io.emit('signal', { "type": "ice_candidate", "message": JSON.stringify({ "candidate": ev.candidate }), "room": SIGNAL_ROOM });
+                    displaySignalMessage("Completed that ice candidate....")
+                }
+            }
+
+            // let the "negotiationneeded" event trigger offer generation
+            rtcPeerConn.onnegotiationneeded = function(){
+                  displaySignalMessage("On negotiation called...");
+                  rtcPeerConn.createOffer(sendLocalDesc, logError);  
+            }
+
+            // once media for a remote track arrives, show it in the remote video element
+            rtcPeerConn.onaddstream = function(ev){
+                displaySignalMessage("Going to add their stream");
+                theirVideoArea.srcObject = ev.stream
+            }
+
+            // get a local stream, show it in a self-view and add it to be sent
             navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-
-            var constraints = {
-                audio: false,
-                video: false
-            };
-            navigator.getUserMedia(constraints, onSuccess, onError);
-
+            navigator.getUserMedia({
+                'audio': true,
+                'video': true
+            }, function(stream){
+                console.log(myVideoArea)
+                console.log(stream)
+                displaySignalMessage("Going to display my stream ....");
+                myVideoArea.srcObject = stream
+                rtcPeerConn.addStream(stream);
+            }, logError)
         }
 
+        // Function to send Local description for Peer connections
+        function sendLocalDesc(desc){
+            rtcPeerConn.setLocalDescription(desc, function(){
+                displaySignalMessage("Sending Local Description");
+                io.emit('signal', { "type": "SDP", "message": JSON.stringify({ "sdp": rtcPeerConn.localDescription }), "room": SIGNAL_ROOM });
 
-
-
-        // onSuccess get the stream and appent it to the video src and adding style to the class and play the video
-        function onSuccess(stream) {
-            console.log("Success! We have a stream!!");
-            // videoArea.src = window.URL.createObjectURL(stream);
-
-            videoArea.srcObject = stream;
-            videoArea.className = 'grayscale_filter';
-
-            videoArea.play();
+            }, logError)
         }
 
-        // onError getting the error details on failure to load video
-        function onError(error) {
-            console.log("Error with getUserMedia", error);
+        // Function to display Error Message
+        function logError(error){
+            displaySignalMessage(error.name + ": " + error.message);
+        } 
+
+        // Function to display Signal Messages
+        function displaySignalMessage(message) {
+            signalingArea.innerHTML = signalingArea.innerHTML + '<br>' + message;
         }
+    // ####################### Signaling Functions ######################################
+
     </script>
 
 </body>
